@@ -14,6 +14,7 @@ use ckb_types::{
 use clap::{load_yaml, value_t, App};
 use explorer::Explorer;
 use input::{collect_allocate, parse_mining_competition_record, serialize_multisig_lock_args};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::BufReader;
@@ -80,17 +81,16 @@ fn main() {
         "initial issued must be 33_600_000_000"
     );
 
-    write_file(
-        rendered,
-        format!("0x{:x}", consensus.genesis_block().hash()),
-    );
+    let mut sha256 = Sha256::new();
+    sha256.input(&rendered);
+    write_file(rendered, format!("{:x}", sha256.result()));
 }
 
-fn write_file(spec: String, hash: String) {
+fn write_file(spec: String, sha256: String) {
     fs::write("lina.toml", spec).unwrap();
     println!("spec: lina.toml");
-    println!("hash: {}", hash);
-    fs::write("hash.txt", hash).unwrap();
+    println!("sha256sum: {}", sha256);
+    fs::write("lina-sha256sum.txt", sha256).unwrap();
 }
 
 fn reduce_allocate(target: u64) -> Vec<IssuedCell> {
