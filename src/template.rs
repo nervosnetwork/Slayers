@@ -16,4 +16,5 @@ pub struct IssuedCell {
     pub capacity: u64,
     pub code_hash: String,
     pub args: String,
+    pub comment: Option<String>,
 }

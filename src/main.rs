@@ -210,6 +210,7 @@ fn foundation_reserve(target: u64) -> IssuedCell {
         capacity: foundation_reserve.as_u64(),
         code_hash: MULTISIG_CODE_HASH.to_string(),
         args: format!("0x{}", faster_hex::hex_string(&args[..]).unwrap()),
+        comment: None,
     }
 }
 
@@ -228,6 +229,7 @@ fn reduce_mining_competition_records(map: BTreeMap<Bytes, Capacity>) -> Vec<Issu
             capacity: capacity.as_u64(),
             code_hash: DEFAULT_CODE_HASH.to_string(),
             args: format!("0x{}", faster_hex::hex_string(&args[..]).unwrap()),
+            comment: None,
         })
         .collect();
 
@@ -245,6 +247,7 @@ fn reduce_mining_competition_records(map: BTreeMap<Bytes, Capacity>) -> Vec<Issu
             "0x{}",
             faster_hex::hex_string(&incentives_address.args[..]).unwrap()
         ),
+        comment: None,
     });
 
     issued
