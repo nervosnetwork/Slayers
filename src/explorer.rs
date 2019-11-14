@@ -171,9 +171,18 @@ impl Explorer {
                 .get_epoch_by_number((tip_epoch.number() - METRIC_EPOCH).into())
                 .unwrap_or_else(|_| exit(1))
                 .unwrap_or_else(|| exit(1));
+            let prev_epoch = self
+                .rpc
+                .get_epoch_by_number((tip_epoch.number() - 1).into())
+                .unwrap_or_else(|_| exit(1))
+                .unwrap_or_else(|| exit(1));
             let first_block = self
                 .rpc
                 .get_header_by_number(first_epoch.start_number.into())?
+                .unwrap_or_else(|| exit(1));
+            let first_block_in_prev_epoch = self
+                .rpc
+                .get_header_by_number(prev_epoch.start_number.into())?
                 .unwrap_or_else(|| exit(1));
             let last_block = self
                 .rpc
@@ -183,6 +192,11 @@ impl Explorer {
                 .unwrap_or_else(|| exit(1));
             let t1: u64 = first_block.inner.timestamp.into();
             let t2: u64 = last_block.inner.timestamp.into();
+            let t3: u64 = first_block_in_prev_epoch.inner.timestamp.into();
+            println!(
+                "Duration of the last epoch: {:.2} hours",
+                ((t2 - t3) as f64) / 3600000f64
+            );
             (t2 - t1) / METRIC_EPOCH / 1000
         };
 
