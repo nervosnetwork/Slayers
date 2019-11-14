@@ -20,7 +20,7 @@ pub struct RawRecord {
     pub capacity: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct LockRecord {
     pub address: String,
     pub capacity: u64,
@@ -44,11 +44,13 @@ pub fn collect_allocate<R: Read>(reader: R, target: u64) -> Vec<IssuedCell> {
         .from_reader(reader);
     rdr.deserialize()
         .filter_map(|record: Result<LockRecord, _>| {
-            record
-                .ok()
-                .and_then(|r| convert_record_allocate(r, target).ok())
+            record.ok().and_then(|r| {
+                convert_record_allocate(r.clone(), target)
+                    .ok()
+                    .map(|out| (r, out))
+            })
         })
-        .map(|record| {
+        .map(|(input, record)| {
             let Allocate {
                 args,
                 code_hash,
@@ -58,6 +60,12 @@ pub fn collect_allocate<R: Read>(reader: R, target: u64) -> Vec<IssuedCell> {
                 capacity: capacity.as_u64(),
                 code_hash,
                 args: format!("0x{}", faster_hex::hex_string(&args[..]).unwrap()),
+                comment: Some(format!(
+                    "genesis_final.csv: {},{},{}",
+                    input.address,
+                    input.capacity,
+                    input.lock.unwrap_or_default()
+                )),
             }
         })
         .collect()
