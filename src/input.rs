@@ -10,17 +10,16 @@ use serde_derive::Deserialize;
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::io::Read;
-use std::process::exit;
 
 const BYTE_SHANNONS: u64 = 100_000_000;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct RawRecord {
     pub address: String,
     pub capacity: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct LockRecord {
     pub address: String,
     pub capacity: u64,
@@ -38,16 +37,21 @@ pub struct Allocate {
     pub capacity: Capacity,
 }
 
-pub fn collect_allocate<R: Read>(reader: R, target: u64) -> Vec<IssuedCell> {
+pub fn read_allocate<R: Read>(reader: R) -> Result<Vec<LockRecord>, Error> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
         .from_reader(reader);
-    rdr.deserialize()
-        .filter_map(|record: Result<LockRecord, _>| {
-            record
-                .ok()
-                .and_then(|r| convert_record_allocate(r, target).ok())
-        })
+    let records: Result<Vec<LockRecord>, csv::Error> = rdr.deserialize().collect();
+    records.map_err(Into::into)
+}
+
+pub fn collect_allocate<R: IntoIterator<Item = LockRecord>>(
+    records: R,
+    target: u64,
+) -> Vec<IssuedCell> {
+    records
+        .into_iter()
+        .filter_map(|record| convert_record_allocate(record, target).ok())
         .map(|record| {
             let Allocate {
                 args,
@@ -63,22 +67,27 @@ pub fn collect_allocate<R: Read>(reader: R, target: u64) -> Vec<IssuedCell> {
         .collect()
 }
 
-pub fn parse_mining_competition_record<R: Read>(reader: R, map: &mut BTreeMap<Bytes, Capacity>) {
+pub fn read_mining_competition_record<R: Read>(reader: R) -> Result<Vec<RawRecord>, Error> {
     let mut rdr = csv::Reader::from_reader(reader);
-    let records: Vec<TestnetIncentives> = rdr
-        .deserialize()
-        .filter_map(|record: Result<RawRecord, _>| record.ok().and_then(|r| r.try_into().ok()))
+    let records: Result<Vec<RawRecord>, csv::Error> = rdr.deserialize().collect();
+    records.map_err(Into::into)
+}
+
+pub fn parse_mining_competition_record<R: IntoIterator<Item = RawRecord>>(
+    records: R,
+    map: &mut BTreeMap<Bytes, Capacity>,
+) -> Result<(), Error> {
+    let records: Vec<_> = records
+        .into_iter()
+        .filter_map(|record| record.try_into().ok())
         .collect();
 
     for record in records {
         let TestnetIncentives { args, capacity } = record;
         let entry = map.entry(args.clone()).or_insert_with(Capacity::zero);
-
-        *entry = entry.safe_add(capacity).unwrap_or_else(|e| {
-            eprintln!("Warn: record capacity reduce overflow: {}", e);
-            exit(1);
-        });
+        *entry = entry.safe_add(capacity)?;
     }
+    Ok(())
 }
 
 impl TryFrom<RawRecord> for TestnetIncentives {

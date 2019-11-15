@@ -1,4 +1,7 @@
+use crate::address::Address;
+use crate::output::Output;
 use crate::rpc::RpcClient;
+use crate::DEFAULT_CODE_HASH;
 use chrono::{prelude::*, Duration};
 use ckb_rational::RationalU256;
 use ckb_types::{
@@ -12,6 +15,7 @@ use ckb_types::{
 use failure::Error;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::fs::File;
 use std::ops::Add;
 use std::process::exit;
 
@@ -36,6 +40,7 @@ impl Explorer {
     pub fn collect(
         &self,
         map: &mut BTreeMap<Bytes, Capacity>,
+        output: &mut Option<csv::Writer<File>>,
     ) -> Result<(u64, u32, Byte32, u64), Error> {
         let tip_header: HeaderView = self.rpc.get_tip_header()?.into();
         let tip_epoch = tip_header.epoch();
@@ -117,16 +122,35 @@ impl Explorer {
             .map(|(_, capacity)| *capacity)
             .try_fold(Capacity::zero(), Capacity::safe_add)?;
 
+        if let Some(wtr) = output.as_mut() {
+            wtr.write_record(&["#round5.stage3", "", "", "", "", ""])
+                .unwrap();
+        }
+
         for (lock, capacity) in rewards {
             let ratio =
                 RationalU256::new(U256::from(capacity.as_u64()), U256::from(total.as_u64()));
             let total = RationalU256::new(U256::from(TOTAL_REWARD.as_u64()), U256::one());
-            let reward = (get_low64(&(total * ratio).into_u256()) / BYTE_SHANNONS) * BYTE_SHANNONS;
+            let reward_ckb = get_low64(&(total * ratio).into_u256()) / BYTE_SHANNONS;
+            let reward = reward_ckb * BYTE_SHANNONS;
 
             let entry = map
                 .entry(lock.args().raw_data())
                 .or_insert_with(Capacity::zero);
             *entry = entry.safe_add(reward)?;
+
+            if let Some(wtr) = output.as_mut() {
+                let address = Address::new(lock.args().raw_data());
+                let output = Output {
+                    address: address.testnet_short_format()?,
+                    capacity: reward_ckb,
+                    lock: None,
+                    code_hash: DEFAULT_CODE_HASH.to_string(),
+                    args: format!("0x{}", faster_hex::hex_string(&address.args[..]).unwrap()),
+                    mainnet_address: address.mainnet_short_format()?,
+                };
+                wtr.serialize(output)?;
+            }
         }
 
         let epochs: Vec<_> = (0..METRIC_EPOCH)
@@ -173,7 +197,7 @@ impl Explorer {
                 .unwrap_or_else(|| exit(1));
             let first_block = self
                 .rpc
-                .get_header_by_number(first_epoch.start_number.into())?
+                .get_header_by_number(first_epoch.start_number)?
                 .unwrap_or_else(|| exit(1));
             let last_block = self
                 .rpc
@@ -186,7 +210,8 @@ impl Explorer {
             (t2 - t1) / METRIC_EPOCH / 1000
         };
 
-        let remaining_seconds = (self.target - tip_epoch.number()) * avg_epoch_duration
+        let remaining_seconds = (self.target.saturating_sub(tip_epoch.number()))
+            * avg_epoch_duration
             + avg_epoch_duration * (tip_epoch.length() - tip_epoch.index() + 11)
                 / tip_epoch.length();
         let remaining_duration = Duration::seconds(remaining_seconds as i64);

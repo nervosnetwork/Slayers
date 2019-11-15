@@ -23,3 +23,10 @@ args:
         long: compact-target
         takes_value: true
         hidden: true
+    - output:
+        short: o
+        help: output file path
+        long: output
+        value_name: OUTPUT
+        help: output path
+        takes_value: true
