@@ -69,9 +69,6 @@ lock.hash_type = "data"
 
 {{ for issued_cell in allocate }}
 [[genesis.issued_cells]]
-{{- if issued_cell.comment }}
-# { issued_cell.comment }
-{{- endif }}
 capacity = { issued_cell.capacity }
 lock.code_hash = "{ issued_cell.code_hash }"
 lock.args = "{ issued_cell.args }"
